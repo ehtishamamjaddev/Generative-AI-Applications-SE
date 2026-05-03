@@ -1,0 +1,693 @@
+{
+  "name": "Lab03-AIBackend",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lab03/submit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -384,
+        -96
+      ],
+      "id": "ba402c88-ab8c-44c4-ac1e-bfe8c2c592dc",
+      "name": "Webhook",
+      "webhookId": "291ee681-dad9-4005-b6f8-8aa66493d693"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body;\n\nconst studentName = (body.studentName || '').trim();\nconst topic = (body.topic || '').trim();\nconst question = (body.question || '').trim();\n\nconst missing = [];\n\nif (!studentName) missing.push('studentName is required');\nif (!topic) missing.push('topic is required');\nif (!question) missing.push('question is required');\n\nif (studentName && !/^[a-zA-Z\\s]+$/.test(studentName)) {\n  missing.push('studentName contains invalid characters');\n}\n\nif (question && question.length < 10) {\n  missing.push('question too short - minimum 10 characters required');\n}\n\nconst submissionID = `SUB-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;\n\nreturn {\n  json: {\n    studentName,\n    topic,\n    question,\n    submissionID,\n    isValid: missing.length === 0,\n    missingFields: missing,\n    receivedAt: new Date().toISOString(),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        -96
+      ],
+      "id": "220e48d1-c04d-466e-be28-1a3b428057f4",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "049f6acd-3e94-4722-9cc9-1ecfb8176836",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        -96
+      ],
+      "id": "458eebbb-5d46-4a66-9acf-e4d9ba699243",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a helpful computer science tutor. Answer the following question about {{ $json.topic }} clearly and concisely for a university student: {{ $json.question }} Provide a direct answer in 3-5 sentences. No preamble needed.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        688,
+        -64
+      ],
+      "id": "f25a7fe0-2e12-4fe6-a59f-58f541d8e479",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        752,
+        96
+      ],
+      "id": "aac4a70b-360d-435f-9435-e7de2bcdb236",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "a0EEVwSYz5dhhrnK",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8ae10cb8-d257-451b-85df-e10a80f35e98",
+              "name": "submissionID",
+              "value": "={{ $('Code in JavaScript').item.json.submissionID }}",
+              "type": "string"
+            },
+            {
+              "id": "bc0cc26f-2829-4f3f-9407-2234779593b4",
+              "name": "studentName",
+              "value": "={{ $('Code in JavaScript').item.json.studentName }}",
+              "type": "string"
+            },
+            {
+              "id": "7890d147-e9cf-4f65-98bd-39542932bedb",
+              "name": "topic",
+              "value": "={{ $('Code in JavaScript').item.json.topic }}",
+              "type": "string"
+            },
+            {
+              "id": "8e7ea556-6635-459b-ab1f-f0a156333372",
+              "name": "question",
+              "value": "={{ $('Code in JavaScript').item.json.question }}",
+              "type": "string"
+            },
+            {
+              "id": "ca9080d0-d23a-45aa-8dc1-45dbe52d404f",
+              "name": "aiAnswer",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "6ea74a79-b4e2-4774-a8ca-9790297e9224",
+              "name": "status",
+              "value": "accepted",
+              "type": "string"
+            },
+            {
+              "id": "47814cd9-72b5-456a-a263-7713a14ce567",
+              "name": "timestamp",
+              "value": "={{ $('Code in JavaScript').item.json.receivedAt }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        -144
+      ],
+      "id": "023a88c9-b60c-452c-ab1b-48910164337a",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI",
+          "mode": "list",
+          "cachedResultName": "Lab03-SubmissionsDB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "SubmissionID": "={{ $json.submissionID }}",
+            "StudentName": "={{ $json.studentName }}",
+            "Topic": "={{ $json.topic }}",
+            "Question": "={{ $json.question }}",
+            "AIAnswer": "={{ $json.aiAnswer }}",
+            "Status": "={{ $json.status }}",
+            "Timestamp": "={{ $json.timestamp }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "SubmissionID",
+              "displayName": "SubmissionID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "StudentName",
+              "displayName": "StudentName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Topic",
+              "displayName": "Topic",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Question",
+              "displayName": "Question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AIAnswer",
+              "displayName": "AIAnswer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1200,
+        -144
+      ],
+      "id": "9eef9291-f93b-415a-b40e-2ee75f26653b",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"submissionID\": \"{{ $('Edit Fields').item.json.submissionID }}\",\n  \"studentName\": \"{{ $('Edit Fields').item.json.studentName }}\",\n  \"topic\": \"{{ $('Edit Fields').item.json.topic }}\",\n  \"answer\": \"{{ $('Edit Fields').item.json.aiAnswer }}\",\n  \"savedAt\": \"{{ $('Edit Fields').item.json.timestamp }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1360,
+        48
+      ],
+      "id": "b96b2df0-0137-45bb-8c97-e78451f4e338",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"message\": \"Missing required fields\",\n  \"missingFields\": {{ JSON.stringify($('Code in JavaScript').item.json.missingFields) }}\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        272,
+        48
+      ],
+      "id": "8d10d6ff-e51c-4e61-8209-6c138757d20b",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "path": "lab03/submissions",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -192,
+        320
+      ],
+      "id": "677d7c7d-1f21-464b-bfe1-f6384498cc21",
+      "name": "Webhook1",
+      "webhookId": "cf987bae-946f-4140-898c-dbee7e85103f"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI",
+          "mode": "list",
+          "cachedResultName": "Lab03-SubmissionsDB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI/edit#gid=0"
+        },
+        "options": {
+          "returnFirstMatch": false
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        16,
+        320
+      ],
+      "id": "8c4b45f0-b2a9-41a0-9f7d-a44068b21056",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryName = ($('Webhook1').first().json.query.studentName || '').trim().toLowerCase();\nconst allRows = $input.all();\n\nif (!queryName) {\n  return allRows.map(item => ({ json: item.json }));\n}\n\nconst filtered = allRows.filter(item => {\n  const name = (item.json.StudentName || '').toLowerCase();\n  return name.includes(queryName);\n});\n\nif (filtered.length === 0) {\n  return [{ json: { found: false, message: `No submissions found for '${queryName}'` } }];\n}\n\nreturn filtered.map(item => ({ json: item.json }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        320
+      ],
+      "id": "78858ba3-eaf9-49d7-ac2b-feb26db24687",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "submissions",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        432,
+        320
+      ],
+      "id": "226641e1-c7c7-4314-ae0f-32d022d64b5c",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"studentName\": \"{{ $('Webhook1').item.json.query.studentName }}\",\n  \"count\": {{ $json.submissions.length }},\n  \"submissions\": {{ JSON.stringify($json.submissions) }}\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        624,
+        320
+      ],
+      "id": "89e53165-d0e4-4f29-b043-9dc55c45befc",
+      "name": "Respond to Webhook3"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI",
+          "mode": "list",
+          "cachedResultName": "Lab03-SubmissionsDB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/13DGRLOaX8_QeDOwKrlGRetrYyHKbEgksrU1wt01cnfI/edit#gid=0"
+        },
+        "options": {
+          "returnFirstMatch": false
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        192,
+        -160
+      ],
+      "id": "49331c73-259f-4efb-a3ca-24148ef590a1",
+      "name": "Get row(s) in sheet1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all rows - handle empty sheet case\nlet allRows = [];\ntry {\n  allRows = $input.all();\n} catch(e) {\n  allRows = [];\n}\n\n// Get the incoming submission details from the first Code node\nconst currentName = ($('Code in JavaScript').first().json.studentName || '').trim().toLowerCase();\nconst currentQuestion = ($('Code in JavaScript').first().json.question || '').trim().toLowerCase();\n\nlet isDuplicate = false;\n\n// Only check if sheet actually has data rows\nif (allRows.length > 0 && allRows[0].json.StudentName) {\n  isDuplicate = !!allRows.find(item => {\n    const name = (item.json.StudentName || '').toLowerCase();\n    const question = (item.json.Question || '').toLowerCase();\n    return name === currentName && question === currentQuestion;\n  });\n}\n\nreturn [{\n  json: {\n    isDuplicate,\n    studentName: $('Code in JavaScript').first().json.studentName,\n    topic: $('Code in JavaScript').first().json.topic,\n    question: $('Code in JavaScript').first().json.question,\n    submissionID: $('Code in JavaScript').first().json.submissionID,\n    receivedAt: $('Code in JavaScript').first().json.receivedAt,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        -160
+      ],
+      "id": "14be9dfc-81e7-4520-93ba-a56997c5687d",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2d0dab6a-706e-4bb3-9dfd-9a16905fad6d",
+              "leftValue": "={{ $json.isDuplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        512,
+        -160
+      ],
+      "id": "3ab560db-389c-4d01-aed3-09b19e230184",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"duplicate\",\n  \"message\": \"This question was already submitted by this student\"\n}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        752,
+        -224
+      ],
+      "id": "2b9a45aa-2205-4cce-9b34-6b9903d43c9b",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "579a038b-79b5-441e-81f7-7852610888f0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "OkxMq8ogZGHB01dm",
+  "tags": []
+}

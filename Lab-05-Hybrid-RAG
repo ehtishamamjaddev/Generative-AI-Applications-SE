@@ -1,0 +1,441 @@
+{
+  "name": "Lab05-Hybrid-RAG Graded Task 3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ae03d5aa-5a71-410f-b3bc-fd118262c998",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "fc2ce2f0-a656-4697-8fa1-64217d268263",
+      "name": "Webhook",
+      "webhookId": "ae03d5aa-5a71-410f-b3bc-fd118262c998"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body;\nconst question = (body.question || '').trim();\nconst studentName = (body.studentName || 'Anonymous').trim();\nconst history = Array.isArray(body.history) ? body.history : [];\nif (!question) throw new Error('Missing required field: question');\nconst windowedHistory = history.slice(-10);\nreturn { json: { question, studentName, history: windowedHistory } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        0
+      ],
+      "id": "4b51b686-28ca-4123-b2b8-6ae11fcb5756",
+      "name": "Query Prep"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.18.55:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"nomic-embed-text\",\n  \"prompt\": \"={{ $json.question }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        256,
+        -96
+      ],
+      "id": "1fab3276-0d83-47dd-a809-e3513530c2ef",
+      "name": "Ollama Embed Query"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lab05-knowledge-base-g4lhclu.svc.aped-4627-b74a.pinecone.io/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"namespace\": \"software-engineering-kb\",\n  \"topK\": 3,\n  \"includeMetadata\": true,\n  \"vector\": {{ JSON.stringify($json.embedding) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        496,
+        -96
+      ],
+      "id": "ac30e40c-a4a0-4577-b3ea-3906c5a7d8cb",
+      "name": "Pinecone Query",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6ZH91HAaB4Vouu0U",
+          "name": "Pinecone"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a14f970d-290d-41a8-85de-d41eccf07274",
+              "leftValue": "={{ $json.contextFound }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        928,
+        16
+      ],
+      "id": "c492e9ee-d46c-466e-941c-7d60e5a1ea6b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": {{ JSON.stringify($json.messages) }},\n  \"max_tokens\": 500,\n  \"temperature\": 0.3\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        -144
+      ],
+      "id": "127235ca-c9e6-47f0-a512-924f2e6dc751",
+      "name": "Groq Generate",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JJ9UrqVhr9owEhte",
+          "name": "Groq"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Build Messages').item.json;\nconst groqResult = $input.item.json;\nconst answer = groqResult.choices[0].message.content;\nconst history = Array.isArray(ctx.history) ? ctx.history : [];\nconst updatedHistory = [...history,\n  { role: 'user', content: ctx.question },\n  { role: 'assistant', content: answer }\n].slice(-10);\nreturn { json: {\n  status: 'success',\n  studentName: ctx.studentName,\n  question: ctx.question,\n  answer,\n  sources: ctx.sources,\n  topScore: ctx.topScore || 0,\n  retrievedCount: ctx.retrievedCount || 0,\n  retrievalMethods: ctx.retrievalMethods || [],\n  contextUsed: true,\n  history: updatedHistory,\n  timestamp: new Date().toISOString()\n}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -128
+      ],
+      "id": "3eed4725-3486-499d-b527-9ec9cc175919",
+      "name": "Build Response"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1664,
+        -272
+      ],
+      "id": "43bc47f2-c749-4710-88f1-1b68a33638de",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"no_context\",\n  \"answer\": \"I could not find relevant information in the knowledge base.\",\n  \"contextUsed\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1248,
+        112
+      ],
+      "id": "ac046152-934a-4cb0-8902-c1f2a660bd3a",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE",
+          "mode": "list",
+          "cachedResultName": "Lab04-KnowledgeBase",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit#gid=0"
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        192
+      ],
+      "id": "44afc7c9-3f85-45be-b618-2fa14094cbe5",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Input comes from Merge node - safe to use\nconst currentItem = $input.item.json;\n\n// Get question/studentName/history from first input\nconst question = currentItem.question || '';\nconst studentName = currentItem.studentName || 'Anonymous';\nconst history = currentItem.history || [];\n\n// Try to get vector results from Pinecone Query\nlet vectorMatches = [];\ntry {\n  const pineconeNode = $node[\"Pinecone Query\"];\n  if (pineconeNode && pineconeNode.json && pineconeNode.json.matches) {\n    vectorMatches = pineconeNode.json.matches;\n  }\n} catch(e) {\n  // Pinecone not available yet\n}\n\nconst seen = new Set();\nconst merged = [];\n\n// Process vector results\nvectorMatches.forEach(m => {\n  const id = m.metadata?.entryId;\n  if (id && !seen.has(id)) {\n    seen.add(id);\n    merged.push({\n      entryId: id,\n      topic: m.metadata?.topic || 'Unknown',\n      content: m.metadata?.content || '',\n      source: m.metadata?.source || 'Unknown',\n      score: m.score ? parseFloat(m.score.toFixed(3)) : 0,\n      retrievalMethod: 'vector'\n    });\n  }\n});\n// Process keyword result (from current item)\nif (currentItem.EntryID) {\n  const id = currentItem.EntryID;\n  if (seen.has(id)) {\n    // Found by both - mark hybrid\n    const existing = merged.find(r => r.entryId === id);\n    if (existing) existing.retrievalMethod = 'hybrid';\n  } else {\n    // Only keyword\n    merged.push({\n      entryId: id,\n      topic: currentItem.Topic || 'Unknown',\n      content: currentItem.Content || '',\n      source: currentItem.Source || 'Unknown',\n      score: null,\n      retrievalMethod: 'keyword'\n    });\n  }\n}\n\n// Build context block\nlet contextBlock = '';\nconst retrievalMethods = [];\n\nmerged.forEach((r, i) => {\n  if (r.content) {\n    contextBlock += `[${i+1}] ${r.content} (Source: ${r.source})\\n\\n`;\n  }\n  retrievalMethods.push({\n    entryId: r.entryId,\n    topic: r.topic,\n    method: r.retrievalMethod,\n    score: r.score\n  });\n});\n\nreturn {\n  json: {\n    contextFound: merged.length > 0,\n    contextBlock,\n    sources: merged.map(r => `${r.entryId} - ${r.topic} (${r.source})`),\n    retrievedCount: merged.length,\n    question,\n    studentName,\n    history,\n    topScore: merged.length > 0 ? Math.max(...merged.filter(r => r.score).map(r => r.score || 0)) : 0,\n    retrievalMethods\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        32
+      ],
+      "id": "dca35a7d-43d9-4b7e-9f5c-4049bd2e22f6",
+      "name": "Merge & Deduplicate"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $input.item.json;\nconst systemMessage = {\n  role: 'system',\n  content: 'You are a precise academic assistant for a Computer Science course at Air University.\\nRULES:\\n1. Answer ONLY using the context provided below.\\n2. If the context does not fully answer the question, say so clearly.\\n3. Be concise and accurate. Target 3-5 sentences.\\n4. Always end with: Sources: [list the sources used]\\n5. Never fabricate facts not present in the context.'\n};\nconst historyMessages = ctx.history || [];\nconst currentUser = {\n  role: 'user',\n  content: 'CONTEXT:\\n' + ctx.contextBlock + '\\nQUESTION: ' + ctx.question + '\\nAnswer based strictly on the context above.'\n};\nreturn { json: { ...ctx, messages: [systemMessage, ...historyMessages, currentUser] } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -144
+      ],
+      "id": "66a8147f-6d51-4f16-89b0-57316cb53462",
+      "name": "Build Messages"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const question = ($json.question || '').toLowerCase();\n\nconst keywords = ($json.Keywords || '').toLowerCase();\n\nconst isMatch = keywords\n  .split(',')\n  .some(k => question.includes(k.trim()));\n\nif (isMatch) {\n  return { json: $json };\n}\n\nreturn null;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        192
+      ],
+      "id": "32b5bdf6-722e-49bc-8fcd-f814c1406366",
+      "name": "Keyword Filter"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        592,
+        192
+      ],
+      "id": "b4b42aee-bbbd-4625-8af0-de74847eb865",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Query Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Prep": {
+      "main": [
+        [
+          {
+            "node": "Ollama Embed Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Embed Query": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Query": {
+      "main": [
+        [
+          {
+            "node": "Merge & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Build Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Generate": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook1": {
+      "main": [
+        []
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Keyword Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge & Deduplicate": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Messages": {
+      "main": [
+        [
+          {
+            "node": "Groq Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword Filter": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Merge & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7eb92b4a-1e50-476d-ac28-272f7f1b0e6b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "8xPEgbEPjd6Nhy0f",
+  "tags": []
+}
