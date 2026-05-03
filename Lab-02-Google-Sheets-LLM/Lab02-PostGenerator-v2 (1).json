@@ -1,0 +1,407 @@
+{
+  "name": "Lab02-PostGenerator-v2",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1Vj4xvsNbjqY6L0TayjtfgD8gOO_tEygd_Qodo13xcC4",
+          "mode": "list",
+          "cachedResultName": "Lab02-PostInput",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vj4xvsNbjqY6L0TayjtfgD8gOO_tEygd_Qodo13xcC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vj4xvsNbjqY6L0TayjtfgD8gOO_tEygd_Qodo13xcC4/edit#gid=0"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ea4fb996-0a3f-4b34-8434-e1c45c6dfa9a",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "ItbW3aYgCxKaTdnC",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2e25140a-fea1-4510-922f-e8394e522cdb",
+              "name": "=prompt",
+              "value": "=Write a {{$json[\"Platform\"]}} post about the topic: '{{$json[\"Topic\"]}}'.  Tone: {{$json[\"Tone\"]}}.  Include these keywords: {{$json[\"Keywords\"]}}.  Format the post with a catchy headline, 3 key points, and a call to action.",
+              "type": "string"
+            },
+            {
+              "id": "c4e56efd-76c0-4396-9237-3642512010db",
+              "name": "post",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "075fbc7a-7179-444e-a7ce-c05367847cd8",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "HumanMessagePromptTemplate",
+              "message": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        544,
+        32
+      ],
+      "id": "309fa4ea-10c8-4997-a021-a2aeceaac387",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        -48
+      ],
+      "id": "3659ab01-3eb1-4a99-b75c-e37eba2cf8e6",
+      "name": "Wait",
+      "webhookId": "2bcd15c6-4cec-4a5b-901a-040a61887bbe"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        720,
+        176
+      ],
+      "id": "2f44252e-f101-45ac-ad12-02ff2a7c6836",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "a0EEVwSYz5dhhrnK",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $json.text }}",
+        "name": "=Approved_{{ $json[\"Topic\"] }}_{{ $now }}.txt",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "root",
+          "cachedResultName": "/ (Root folder)"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1264,
+        -112
+      ],
+      "id": "d03102be-a696-4993-8ae8-595d7bf3c071",
+      "name": "Create file from text",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "SvgYPDq58kAuux7o",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const post = $input.item.json.text || '';\n\nconst words = post.trim().split(/\\s+/).filter(w => w.length > 0);\nconst wordCount = words.length;\n\nconst hasHashtag = post.includes('#');\n\nlet failureReason = '';\nif (wordCount < 80 && !hasHashtag) {\n  failureReason = 'Too short and missing hashtag';\n} else if (wordCount < 80) {\n  failureReason = `Too short (${wordCount} words, need 80)`;\n} else if (!hasHashtag) {\n  failureReason = 'Missing hashtag';\n}\n\n$input.item.json.wordCount = wordCount;\n$input.item.json.hasHashtag = hasHashtag;\n$input.item.json.failureReason = failureReason;\n$input.item.json.passesQuality = wordCount >= 80 && hasHashtag;\n\nreturn $input.item;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -112
+      ],
+      "id": "de85d9ad-eb61-400a-8a80-4285a203bd9b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ef2aa861-8cac-49a2-90c6-e96a5fa1a508",
+              "leftValue": "={{ $json.passesQuality }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1024,
+        -16
+      ],
+      "id": "e7a861fe-20e2-4133-8f89-bbd009d3e89f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Vj4xvsNbjqY6L0TayjtfgD8gOO_tEygd_Qodo13xcC4",
+          "mode": "list",
+          "cachedResultName": "Lab02-PostInput",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vj4xvsNbjqY6L0TayjtfgD8gOO_tEygd_Qodo13xcC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 742009534,
+          "mode": "list",
+          "cachedResultName": "RejectionLog",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vj4xvsNbjqY6L0TayjtfgD8gOO_tEygd_Qodo13xcC4/edit#gid=742009534"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Topic": "={{ $json[\"Topic\"] }}",
+            "WordCount": "={{ $json.wordCount }}",
+            "FailureReason": "={{ $json.failureReason }}",
+            "Platform": "={{ $json[\"Platform\"] }}",
+            "Timestamp": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Topic",
+              "displayName": "Topic",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "WordCount",
+              "displayName": "WordCount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FailureReason",
+              "displayName": "FailureReason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1216,
+        144
+      ],
+      "id": "aa570094-6d5c-42f7-89ae-25aa82b51e7d",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create file from text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4f86e69c-10b8-4bc5-8ed9-efe3e65d9871",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "pmEkY1dk0kHw5AOU",
+  "tags": []
+}

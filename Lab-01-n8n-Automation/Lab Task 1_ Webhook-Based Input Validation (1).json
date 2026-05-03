@@ -1,0 +1,182 @@
+{
+  "name": "Lab Task 1: Webhook-Based Input Validation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "735fb0d0-e886-4eb4-ad3f-ae7f6cfe6a4d",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -544,
+        16
+      ],
+      "id": "19b01b05-6e33-4264-95c9-93122d247777",
+      "name": "Webhook",
+      "webhookId": "8f5dead1-5733-4d24-973b-78bfaafbcaa4"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"accepted\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        240,
+        0
+      ],
+      "id": "9aa9a9f0-18e1-411d-af6e-cdcf53316415",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bb6fa8af-04e6-43fc-aed7-782b5321b3d4",
+              "leftValue": "={{$json.body.message.length}}\n",
+              "rightValue": "=5",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": false
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -272,
+        16
+      ],
+      "id": "0f6a654e-14dd-4eb2-af8c-8611be7a47a6",
+      "name": "Validate Message Length"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "423211c3-c1ec-44ca-8b7f-1d858d4573c1",
+              "name": "name",
+              "value": "={{ $json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "5cc56749-851c-4cd7-91ef-b404ccab68f8",
+              "name": "message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "b6b9597d-2132-4c52-97cf-31dac5b42f23",
+              "name": "course",
+              "value": "={{ $json.body.course }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f32b1417-8a3e-4809-8089-0bfc29695f74",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"rejected\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -32,
+        160
+      ],
+      "id": "cdf0c19f-9948-4285-961e-09ca90b576c8",
+      "name": "Respond to Webhook1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Message Length",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Message Length": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "48fa44bb-5db1-40f9-90ee-bfb3c31a3687",
+  "meta": {
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "a10IdO6WN84Orrc4",
+  "tags": []
+}

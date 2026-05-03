@@ -1,0 +1,458 @@
+{
+  "name": "Task 1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "40e44263-7853-482f-ae18-f3c834472f1d",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -368,
+        -64
+      ],
+      "id": "aca45065-bc23-4998-be7d-07b4fe7f84df",
+      "name": "Webhook",
+      "webhookId": "40e44263-7853-482f-ae18-f3c834472f1d"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body;\nconst question = (body.question || '').trim();\nconst studentName = (body.studentName || 'Anonymous').trim();\nconst history = Array.isArray(body.history) ? body.history : [];\n\nif (!question) throw new Error('Missing required field: question');\n\nconst stopWords = new Set([\n  'what','is','are','the','a','an','of','in','to','and','or',\n  'how','does','do','can','why','when','where','which','who',\n  'me','my','explain','describe','tell','about','difference',\n  'between','give','example','examples','please','define'\n]);\n\nconst queryKeywords = question\n  .toLowerCase()\n  .replace(/[^a-z0-9\\s]/g, '')\n  .split(/\\s+/)\n  .filter(w => w.length > 2 && !stopWords.has(w));\n\n// Extract keywords from last history question too\nconst historyKeywords = history.length > 0\n  ? (history[history.length-1].question || '')\n      .toLowerCase().replace(/[^a-z0-9\\s]/g,'').split(/\\s+/)\n      .filter(w => w.length > 2 && !stopWords.has(w))\n  : [];\n\n// Merge both for broader retrieval\nconst allKeywords = [...new Set([...queryKeywords, ...historyKeywords])];\n\nreturn {\n  json: {\n    question,\n    studentName,\n    history,\n    queryKeywords: allKeywords,\n    queryKeywordsStr: allKeywords.join(', '),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -64
+      ],
+      "id": "b3adfbae-48ff-4ee0-b14c-9686c612c47a",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE",
+          "mode": "list",
+          "cachedResultName": "Lab04-KnowledgeBase",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        48,
+        -64
+      ],
+      "id": "87ea67f2-249b-4689-8c66-84823003d604",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryKeywords = $('Code in JavaScript').item.json.queryKeywords;\nconst question = $('Code in JavaScript').item.json.question;\nconst studentName = $('Code in JavaScript').item.json.studentName;\n\nconst allEntries = $input.all();\n\nconst scored = allEntries.map(item => {\n  const entry = item.json;\n  const kbText = `${entry.Keywords} ${entry.Content} ${entry.Topic}`.toLowerCase();\n  const matchCount = queryKeywords.filter(kw => kbText.includes(kw)).length;\n  const topicBonus = queryKeywords.some(kw =>\n    (entry.Topic || '').toLowerCase().includes(kw)) ? 1 : 0;\n  return {\n    ...entry,\n    _score: matchCount + topicBonus,\n  };\n}).filter(e => e._score > 0)\n  .sort((a, b) => b._score - a._score)\n  .slice(0, 3);\n\n// Get top score\nconst topScore = scored.length > 0 ? scored[0]._score : 0;\n\n// Only include entries with score >= 2\nconst highConfidence = scored.filter(e => e._score >= 2);\n\nlet contextBlock = '';\nlet sources = [];\n\nif (highConfidence.length > 0) {\n  highConfidence.forEach((e, idx) => {\n    contextBlock += `[${idx+1}] ${e.Content} (Source: ${e.Source})\\n\\n`;\n    sources.push(`${e.EntryID} — ${e.Topic} (${e.Source})`);\n  });\n}\n\nreturn {\n  json: {\n    question,\n    studentName,\n    contextFound: highConfidence.length > 0,      // true only if score >= 2\n    lowConfidence: scored.length > 0 && highConfidence.length === 0, // matches exist but all < 2\n    contextBlock,\n    sources,\n    retrievedCount: highConfidence.length,\n    topScore,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -208
+      ],
+      "id": "67478a99-cd20-4b06-8500-4e4f670948af",
+      "name": "Retrieval Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2c3469cd-ca56-404f-bcf0-329ab8580b62",
+              "leftValue": "={{ $json.contextFound }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        432,
+        -176
+      ],
+      "id": "58453c85-281c-4598-bdc9-c324074d8803",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.fullPrompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a precise academic assistant for a Computer Science course at Air University.  RULES: 1. Answer ONLY using the context provided below. Do not use external knowledge. 2. If the context does not fully answer the question, say so clearly. 3. Be concise and accurate. Target 3-5 sentences. 4. Always end with: 'Sources: [list the sources used]' 5. Never fabricate facts, citations, or examples not present in the context."
+            },
+            {
+              "type": "HumanMessagePromptTemplate",
+              "message": "=CONTEXT: {{ $json.contextBlock }}  QUESTION: {{ $json.question }}  Answer based strictly on the context above."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        784,
+        -240
+      ],
+      "id": "50ea887c-b29f-4b26-8fee-dee2642817b0",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        800,
+        64
+      ],
+      "id": "63d1ac4a-013e-47b7-ad81-fcb910d1a70d",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "4Kr9mXw17bMCBh8k",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "107b83e2-b577-48da-9d8a-f16caff9be9e",
+              "name": "answer",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "5ecdb3c7-6f92-46f9-94ed-55dc9da9b51b",
+              "name": "question",
+              "value": "={{ $('Retrieval Code').item.json.question }}",
+              "type": "string"
+            },
+            {
+              "id": "df1a3790-235b-4d88-b9b8-844ced02b6f8",
+              "name": "studentName",
+              "value": "={{ $('Retrieval Code').item.json.studentName }}",
+              "type": "string"
+            },
+            {
+              "id": "61a1d617-a221-4298-9ba2-d8887f41ec8e",
+              "name": "sources",
+              "value": "={{ $('Retrieval Code').item.json.sources.join('; ') }}",
+              "type": "string"
+            },
+            {
+              "id": "e57dda08-6ab4-4fbe-89cc-0de70c8e3d45",
+              "name": "retrievedCount",
+              "value": "={{ $('Retrieval Code').item.json.retrievedCount }}",
+              "type": "string"
+            },
+            {
+              "id": "7054c7e7-3717-4918-ae2d-16cfc249074f",
+              "name": "contextUsed",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "9a029d75-abe2-4cfc-b7d5-ca8bda06f7e6",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1040,
+        -128
+      ],
+      "id": "ade86630-5901-406e-a78e-7f435f435b53",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"studentName\": \"{{ $json.studentName }}\",\n  \"question\": \"{{ $json.question }}\",\n  \"answer\": {{ JSON.stringify($json.answer) }},\n  \"sources\": \"{{ $json.sources }}\",\n  \"retrievedDocs\": {{ $json.retrievedCount }},\n  \"contextUsed\": true,\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1264,
+        -16
+      ],
+      "id": "629e038c-e2bf-4aa1-9a22-8ab65c947a39",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"no_context\",\n  \"studentName\": \"{{ $('Retrieval Code').item.json.studentName }}\",\n  \"question\": \"{{ $('Retrieval Code').item.json.question }}\",\n  \"answer\": \"I could not find relevant information in the knowledge base for this question. Please consult your course materials or ask your instructor.\",\n  \"sources\": [],\n  \"retrievedDocs\": 0,\n  \"topScore\": {{ $('Retrieval Code').item.json.topScore }},\n  \"contextUsed\": false,\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        224
+      ],
+      "id": "2c5534d4-9f5d-4960-9a88-b2d8969b77cf",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const retrieval = $('Retrieval Code').item.json;\nconst history = $('Code in JavaScript').item.json.history;\n\n// Build alternating user/assistant history pairs\nconst historyMessages = [];\nhistory.forEach(turn => {\n  if (turn.question) historyMessages.push({ role: 'user', content: turn.question });\n  if (turn.answer) historyMessages.push({ role: 'assistant', content: turn.answer });\n});\n\n// Current question with injected context\nconst currentMessage = {\n  role: 'user',\n  content: `CONTEXT:\\n${retrieval.contextBlock}\\nQUESTION: ${retrieval.question}\\nAnswer based strictly on the context above.`\n};\n\nreturn {\n  json: {\n    ...retrieval,\n    messages: [...historyMessages, currentMessage],\n    fullPrompt: [...historyMessages, currentMessage]\n      .map(m => `${m.role.toUpperCase()}: ${m.content}`)\n      .join('\\n\\n')\n  }\n};\n```\n\nClick **Close**.\n\n---\n\n## Step 4: Update the Basic LLM Chain Node\n\nOpen the **Basic LLM Chain** node and update the **Prompt field** to:\n```\n{{ $json.fullPrompt }}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        -304
+      ],
+      "id": "d0c648e8-b2f1-484f-828a-58b20f0e6608",
+      "name": "Build Messages"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7a5aed9b-a1fe-4f44-a27e-4541537ac27d",
+              "leftValue": "={{ $json.lowConfidence }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        272,
+        96
+      ],
+      "id": "828a57d7-287d-4472-99ff-bc12bc9becae",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"low_confidence\",\n  \"studentName\": \"{{ $('Retrieval Code').item.json.studentName }}\",\n  \"question\": \"{{ $('Retrieval Code').item.json.question }}\",\n  \"answer\": \"I found some related information but it may not fully answer your question. Please consult your course materials for more details.\",\n  \"sources\": [],\n  \"retrievedDocs\": 0,\n  \"topScore\": {{ $('Retrieval Code').item.json.topScore }},\n  \"contextUsed\": false,\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        544,
+        80
+      ],
+      "id": "3448726c-02ad-4bce-b227-aaf7234f8228",
+      "name": "Respond to Webhook2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Retrieval Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieval Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Build Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Build Messages": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "46f0cfa6-291c-47e0-aa82-5692fbb9b5ed",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "iYxbS4Wy8KNvk8bs",
+  "tags": []
+}

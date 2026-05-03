@@ -1,0 +1,391 @@
+{
+  "name": "Lab04-RAG-MultiTurn",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "be6b7206-ce2c-47c6-b885-f1253eb041f2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -368,
+        -64
+      ],
+      "id": "5dd0c7fb-f487-400b-aa6a-d60523bd93d3",
+      "name": "Webhook",
+      "webhookId": "be6b7206-ce2c-47c6-b885-f1253eb041f2"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body;\nconst question = (body.question || '').trim();\nconst studentName = (body.studentName || 'Anonymous').trim();\nconst history = Array.isArray(body.history) ? body.history : [];\n\nif (!question) throw new Error('Missing required field: question');\n\nconst stopWords = new Set([\n  'what','is','are','the','a','an','of','in','to','and','or',\n  'how','does','do','can','why','when','where','which','who',\n  'me','my','explain','describe','tell','about','difference',\n  'between','give','example','examples','please','define'\n]);\n\nconst queryKeywords = question\n  .toLowerCase()\n  .replace(/[^a-z0-9\\s]/g, '')\n  .split(/\\s+/)\n  .filter(w => w.length > 2 && !stopWords.has(w));\n\n// Extract keywords from last history question too\nconst historyKeywords = history.length > 0\n  ? (history[history.length-1].question || '')\n      .toLowerCase().replace(/[^a-z0-9\\s]/g,'').split(/\\s+/)\n      .filter(w => w.length > 2 && !stopWords.has(w))\n  : [];\n\n// Merge both for broader retrieval\nconst allKeywords = [...new Set([...queryKeywords, ...historyKeywords])];\n\nreturn {\n  json: {\n    question,\n    studentName,\n    history,\n    queryKeywords: allKeywords,\n    queryKeywordsStr: allKeywords.join(', '),\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -64
+      ],
+      "id": "0901f822-5c43-41dc-bd49-1eec9ce4ef2d",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE",
+          "mode": "list",
+          "cachedResultName": "Lab04-KnowledgeBase",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        48,
+        -64
+      ],
+      "id": "66239641-fd89-484d-b61e-994bf88843d5",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get query keywords from the first Code node\nconst queryKeywords = $('Code in JavaScript').item.json.queryKeywords;  // array of strings\nconst question      = $('Code in JavaScript').item.json.question;\nconst studentName   = $('Code in JavaScript').item.json.studentName;\n\n// Get all KB rows from Google Sheets\nconst allEntries = $input.all();\n\n// Score each entry by counting keyword matches\nconst scored = allEntries.map(item => {\n  const entry    = item.json;\n  const kbText   = `${entry.Keywords} ${entry.Content} ${entry.Topic}`.toLowerCase();\n\n  // Count how many query keywords appear in this KB entry\n  const matchCount = queryKeywords.filter(kw => kbText.includes(kw)).length;\n\n  // Bonus: exact topic word match scores higher\n  const topicBonus = queryKeywords.some(kw =>\n    (entry.Topic || '').toLowerCase().includes(kw)) ? 1 : 0;\n\n  return {\n    ...entry,\n    _score: matchCount + topicBonus,\n  };\n}).filter(e => e._score > 0)            // keep only entries with at least 1 match\n  .sort((a, b) => b._score - a._score)  // sort descending by score\n  .slice(0, 3);                          // take top 3 entries\n\n// Build the context string to inject into the LLM prompt\nlet contextBlock = '';\nlet sources      = [];\n\nif (scored.length > 0) {\n  scored.forEach((e, idx) => {\n    contextBlock += `[${idx+1}] ${e.Content} (Source: ${e.Source})\\n\\n`;\n    sources.push(`${e.EntryID} — ${e.Topic} (${e.Source})`);\n  });\n}\n\nreturn {\n  json: {\n    question,\n    studentName,\n    contextFound: scored.length > 0,\n    contextBlock,\n    sources,\n    retrievedCount: scored.length,\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -64
+      ],
+      "id": "4ea307b5-00ea-4838-bf4d-3e877bee2046",
+      "name": "Retrieval Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2c3469cd-ca56-404f-bcf0-329ab8580b62",
+              "leftValue": "={{ $json.contextFound }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        464,
+        -64
+      ],
+      "id": "01a288a9-95da-4893-a028-eb984df15181",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.fullPrompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a precise academic assistant for a Computer Science course at Air University.  RULES: 1. Answer ONLY using the context provided below. Do not use external knowledge. 2. If the context does not fully answer the question, say so clearly. 3. Be concise and accurate. Target 3-5 sentences. 4. Always end with: 'Sources: [list the sources used]' 5. Never fabricate facts, citations, or examples not present in the context."
+            },
+            {
+              "type": "HumanMessagePromptTemplate",
+              "message": "=CONTEXT: {{ $json.contextBlock }}  QUESTION: {{ $json.question }}  Answer based strictly on the context above."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        736,
+        -128
+      ],
+      "id": "906050d1-88a6-4688-a6df-fd92c83b75c3",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        800,
+        64
+      ],
+      "id": "8b067be5-d826-485b-b835-d524c2a7cc94",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "4Kr9mXw17bMCBh8k",
+          "name": "Google Gemini(PaLM) Api account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "107b83e2-b577-48da-9d8a-f16caff9be9e",
+              "name": "answer",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "5ecdb3c7-6f92-46f9-94ed-55dc9da9b51b",
+              "name": "question",
+              "value": "={{ $('Retrieval Code').item.json.question }}",
+              "type": "string"
+            },
+            {
+              "id": "df1a3790-235b-4d88-b9b8-844ced02b6f8",
+              "name": "studentName",
+              "value": "={{ $('Retrieval Code').item.json.studentName }}",
+              "type": "string"
+            },
+            {
+              "id": "61a1d617-a221-4298-9ba2-d8887f41ec8e",
+              "name": "sources",
+              "value": "={{ $('Retrieval Code').item.json.sources.join('; ') }}",
+              "type": "string"
+            },
+            {
+              "id": "e57dda08-6ab4-4fbe-89cc-0de70c8e3d45",
+              "name": "retrievedCount",
+              "value": "={{ $('Retrieval Code').item.json.retrievedCount }}",
+              "type": "string"
+            },
+            {
+              "id": "7054c7e7-3717-4918-ae2d-16cfc249074f",
+              "name": "contextUsed",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "9a029d75-abe2-4cfc-b7d5-ca8bda06f7e6",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1040,
+        -128
+      ],
+      "id": "d7a6fa17-4c32-4b2d-ae84-18a9262fcb4b",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"studentName\": \"{{ $json.studentName }}\",\n  \"question\": \"{{ $json.question }}\",\n  \"answer\": {{ JSON.stringify($json.answer) }},\n  \"sources\": \"{{ $json.sources }}\",\n  \"retrievedDocs\": {{ $json.retrievedCount }},\n  \"contextUsed\": true,\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1264,
+        -16
+      ],
+      "id": "bb39ca83-02be-4c0e-bfaa-6e9300db4239",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"no_context\",\n  \"studentName\": \"{{ $('Retrieval Code').item.json.studentName }}\",\n  \"question\": \"{{ $('Retrieval Code').item.json.question }}\",\n  \"answer\": \"I could not find relevant information in the knowledge base for this question. Please consult your course materials or ask your instructor.\",\n  \"sources\": [],\n  \"retrievedDocs\": 0,\n  \"contextUsed\": false,\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        512,
+        176
+      ],
+      "id": "87b6c93c-e5da-4a81-880a-d7ec5494437a",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const retrieval = $('Retrieval Code').item.json;\nconst history = $('Code in JavaScript').item.json.history;\n\n// Build alternating user/assistant history pairs\nconst historyMessages = [];\nhistory.forEach(turn => {\n  if (turn.question) historyMessages.push({ role: 'user', content: turn.question });\n  if (turn.answer) historyMessages.push({ role: 'assistant', content: turn.answer });\n});\n\n// Current question with injected context\nconst currentMessage = {\n  role: 'user',\n  content: `CONTEXT:\\n${retrieval.contextBlock}\\nQUESTION: ${retrieval.question}\\nAnswer based strictly on the context above.`\n};\n\nreturn {\n  json: {\n    ...retrieval,\n    messages: [...historyMessages, currentMessage],\n    fullPrompt: [...historyMessages, currentMessage]\n      .map(m => `${m.role.toUpperCase()}: ${m.content}`)\n      .join('\\n\\n')\n  }\n};\n```\n\nClick **Close**.\n\n---\n\n## Step 4: Update the Basic LLM Chain Node\n\nOpen the **Basic LLM Chain** node and update the **Prompt field** to:\n```\n{{ $json.fullPrompt }}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -256
+      ],
+      "id": "c634c77d-06d6-4fd2-a05f-c8d66aee2a3f",
+      "name": "Build Messages"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Retrieval Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieval Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Build Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Build Messages": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4990e726-67ba-4d7a-ba09-1e58deba46e0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "uefAiVQkUxj9Wv1e",
+  "tags": []
+}

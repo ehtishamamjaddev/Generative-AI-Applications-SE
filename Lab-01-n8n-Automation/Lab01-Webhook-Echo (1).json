@@ -1,0 +1,110 @@
+{
+  "name": "Lab01-Webhook-Echo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "735fb0d0-e886-4eb4-ad3f-ae7f6cfe6a4d",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "80c49bee-ec2e-402a-ad71-a3034c499bf5",
+      "name": "Webhook",
+      "webhookId": "735fb0d0-e886-4eb4-ad3f-ae7f6cfe6a4d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a23fcb83-8cd8-473c-81bc-2b42e26cd6a1",
+              "name": "name",
+              "value": "={{ $json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "b3a53c2c-0ab9-49b4-b319-92d10d445603",
+              "name": "messege",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "4ee065e6-cb0c-4d78-85f8-88cf03f57084",
+              "name": "course",
+              "value": "={{ $json.body.course }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "a1fee93c-3b19-45e9-b86c-084062aea70f",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        416,
+        0
+      ],
+      "id": "ab75e1a9-db04-4241-a672-5fd2f6695391",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "84981b6e-bb46-4e2b-a7e8-e6fcae4a714c",
+  "meta": {
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "kehh3pQp9hUESGdJ",
+  "tags": []
+}
