@@ -71,30 +71,6 @@ This repository contains a complete progression through 6 advanced labs in Gener
 - ✅ Agent tool trace and citation rendering
 - ✅ Production deployment strategies
 
-## 📊 Marks Distribution
-
-| Lab | Task | Marks | Status |
-|-----|------|-------|--------|
-| 01 | Task 1: Webhook Validation | 5 | ✅ |
-| 01 | Task 2: Office-Hours Filter | 7 | ✅ |
-| 01 | Task 3: Export & Documentation | 8 | ✅ |
-| 02 | Activity 1: Post Generator | — | ✅ |
-| 02 | Activity 2: Quality Gate | — | ✅ |
-| 03 | Task 1: Input Validation | 5 | ✅ |
-| 03 | Task 2: Duplicate Detection | 7 | ✅ |
-| 03 | Task 3: API Documentation | 8 | ✅ |
-| 04 | Task 1: Relevance Threshold | 5 | ✅ |
-| 04 | Task 2: KB Expansion | 10 | ✅ |
-| 04 | Task 3: Audit Logging | 10 | ✅ |
-| 05 | Task 1: Dynamic Threshold | 5 | ✅ |
-| 05 | Task 2: Domain KB Expansion | 10 | ✅ |
-| 05 | Task 3: Hybrid RAG | 10 | ✅ |
-| 06 | Task 1: Wikipedia Tool | 5 | ✅ |
-| 06 | Task 2: Tool Logging | 5 | ✅ |
-| 06 | Task 3: Domain KB & Reflection | 10 | ✅ |
-
-**Total: 120 marks**
-
 ## 🔑 Key Learning Outcomes
 
 ### Workflow Automation
