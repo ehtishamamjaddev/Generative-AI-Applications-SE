@@ -1,0 +1,365 @@
+{
+  "name": "Task 1 Lab 5",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "6e844034-45c3-4ea3-8221-19e965155522",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "e2e7afae-5c2a-48e5-9e96-75b2b084e9dc",
+      "name": "Webhook",
+      "webhookId": "6e844034-45c3-4ea3-8221-19e965155522"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $input.item.json.body;\nconst question = (body.question || '').trim();\nconst studentName = (body.studentName || 'Anonymous').trim();\nconst history = Array.isArray(body.history) ? body.history : [];\nconst minScore = typeof body.minScore === 'number' ? body.minScore : 0.60;\n\nif (!question) throw new Error('Missing required field: question');\n\nconst windowedHistory = history.slice(-10);\nreturn { json: { question, studentName, history: windowedHistory, minScore } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        0
+      ],
+      "id": "a791a75a-5471-4217-90f9-273b3152912a",
+      "name": "Query Prep"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.18.55:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"nomic-embed-text\",\n  \"prompt\": \"={{ $json.question }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        256,
+        0
+      ],
+      "id": "a6e08b33-a35c-464f-8226-ea53f726610b",
+      "name": "Ollama Embed Query"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"status\": \"test\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        16,
+        208
+      ],
+      "id": "c02152d8-49b1-4a33-8dfd-a919cc75b659",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lab05-knowledge-base-g4lhclu.svc.aped-4627-b74a.pinecone.io/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"namespace\": \"software-engineering-kb\",\n  \"topK\": 3,\n  \"includeMetadata\": true,\n  \"vector\": {{ JSON.stringify($json.embedding) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        480,
+        0
+      ],
+      "id": "4accb58d-4243-4c7d-89c2-8c3abad4ded9",
+      "name": "Pinecone Query",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6ZH91HAaB4Vouu0U",
+          "name": "Pinecone"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const pineconeResult = $input.item.json;\nconst matches = pineconeResult.matches || [];\n\nconst THRESHOLD = $input.item.json.minScore ?? 0.60;\nconst relevant = matches.filter(m => m.score >= THRESHOLD);\n\nlet contextBlock = '';\nconst sources = [];\nconst scores = [];\nconst scoreLabels = [];\n\nif (relevant.length > 0) {\n  relevant.forEach((m, idx) => {\n    const meta = m.metadata || {};\n    contextBlock += '[' + (idx+1) + '] ' + meta.content + ' (Source: ' + meta.source + ')\\n\\n';\n    sources.push(meta.entryId + ' - ' + meta.topic + ' (' + meta.source + ')');\n    scores.push(parseFloat(m.score.toFixed(3)));\n    scoreLabels.push((meta.entryId || 'Unknown') + ': ' + m.score.toFixed(3));\n  });\n}\n\nconst question = $input.item.json.question || '';\nconst studentName = $input.item.json.studentName || '';\nconst history = $input.item.json.history || [];\nconst minScore = $input.item.json.minScore ?? 0.60;\n\nreturn {\n  contextFound: relevant.length > 0,\n  contextBlock,\n  sources,\n  scores,\n  scoreLabels,\n  topScore: scores.length > 0 ? Math.max(...scores) : 0,\n  retrievedCount: relevant.length,\n  question,\n  studentName,\n  history,\n  minScore\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        0
+      ],
+      "id": "bbdd3b95-a15c-4f54-8977-c6ecef713b4c",
+      "name": "Build Context"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a14f970d-290d-41a8-85de-d41eccf07274",
+              "leftValue": "={{ $json.contextFound }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        0
+      ],
+      "id": "7411fba2-95dc-4e60-a1dc-1f9d649f645c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $input.item.json;\nconst systemMessage = {\n  role: 'system',\n  content: 'You are a precise academic assistant for a Computer Science course at Air University.\\nRULES:\\n1. Answer ONLY using the context provided below.\\n2. If the context does not fully answer the question, say so clearly.\\n3. Be concise and accurate. Target 3-5 sentences.\\n4. Always end with: Sources: [list the sources used]\\n5. Never fabricate facts not present in the context.'\n};\nconst historyMessages = ctx.history || [];\nconst currentUser = {\n  role: 'user',\n  content: 'CONTEXT:\\n' + ctx.contextBlock + '\\nQUESTION: ' + ctx.question + '\\nAnswer based strictly on the context above.'\n};\nreturn { json: { ...ctx, messages: [systemMessage, ...historyMessages, currentUser] } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -64
+      ],
+      "id": "73c371ab-356f-443c-9f04-109fabba2fc3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": {{ JSON.stringify($json.messages) }},\n  \"max_tokens\": 500,\n  \"temperature\": 0.3\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1312,
+        -80
+      ],
+      "id": "b87d74db-105e-4bf7-9e0f-ddfc8bc7e6ec",
+      "name": "Groq Generate",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JJ9UrqVhr9owEhte",
+          "name": "Groq"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Code in JavaScript').item.json;\nconst groqResult = $input.item.json;\nconst answer = groqResult.choices[0].message.content;\nconst history = Array.isArray(ctx.history) ? ctx.history : [];\nconst updatedHistory = [...history,\n  { role: 'user', content: ctx.question },\n  { role: 'assistant', content: answer }\n].slice(-10);\nreturn { json: {\n  status: 'success',\n  studentName: ctx.studentName,\n  question: ctx.question,\n  answer,\n  sources: Array.isArray(ctx.sources) ? ctx.sources.join('; ') : '',\n  topScore: ctx.topScore || 0,\n  retrievedCount: ctx.retrievedCount || 0,\n  contextUsed: true,\n  history: updatedHistory,\n  timestamp: new Date().toISOString()\n}};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -96
+      ],
+      "id": "a16e8c0e-3828-461a-907e-2108763384c0",
+      "name": "Build Response"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1632,
+        -288
+      ],
+      "id": "555a2a09-cb39-4cf4-9271-12e237d350ff",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"no_context\",\n  \"answer\": \"I could not find relevant information in the knowledge base.\",\n  \"topScore\": {{ $json.topScore }},\n  \"retrievedCount\": 0,\n  \"contextUsed\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1056,
+        160
+      ],
+      "id": "c6e5a8a9-4bb1-4a12-a36a-0e08399bae78",
+      "name": "Respond to Webhook2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Query Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Prep": {
+      "main": [
+        [
+          {
+            "node": "Ollama Embed Query",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Embed Query": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Query": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Groq Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Generate": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook1": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d18f36e1-cba1-4a97-8937-e2fe69e1b258",
+  "meta": {
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "0NWRM8lxVQHUZEnB",
+  "tags": []
+}

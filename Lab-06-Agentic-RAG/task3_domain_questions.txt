@@ -1,0 +1,5 @@
+1) In the Transformer paper, what problem does self-attention solve compared with recurrent models?
+2) According to the paper, explain positional encoding and why it is needed.
+3) What does the paper say about multi-head attention and its benefit?
+4) From the Transformer paper, what BLEU score improvements are reported for machine translation?
+5) In the paper, summarize the encoder-decoder architecture and list key layer components.

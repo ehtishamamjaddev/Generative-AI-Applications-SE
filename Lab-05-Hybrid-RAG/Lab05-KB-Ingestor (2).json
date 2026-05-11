@@ -1,0 +1,223 @@
+{
+  "name": "Lab05-KB-Ingestor",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        0
+      ],
+      "id": "4354a903-3e56-4377-a15e-e2db409e0a4f",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE",
+          "mode": "list",
+          "cachedResultName": "Lab04-KnowledgeBase",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12iEbE5upONqQ91CIe20ODLnwMhH3ErWY00U3CFVe0OE/edit#gid=0"
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        64,
+        0
+      ],
+      "id": "aaee2636-8a12-4981-bcc6-cc39f0d54013",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "oyIPxi1rUSkv5KWv",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine fields into a rich text string for embedding.\n// Including Topic, Keywords, and Content gives the model fuller semantic context.\nconst items = $input.all();\n\nreturn items.map(item => {\n  const e = item.json;\n  const textToEmbed = `Topic: ${e.Topic}. Keywords: ${e.Keywords}. ${e.Content}`;\n  \n  return {\n    json: {\n      id: e.EntryID,\n      textToEmbed,\n      metadata: {\n        entryId: e.EntryID,\n        topic: e.Topic,\n        content: e.Content,\n        source: e.Source,\n        keywords: e.Keywords\n      }\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        0
+      ],
+      "id": "c97774b2-7881-4e8c-aa7d-07177f7514ae",
+      "name": "Prepare Embedding Input"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.18.55:11434/api/embeddings",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"nomic-embed-text\",\n  \"prompt\": \"{{ $json.textToEmbed }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        208
+      ],
+      "id": "086647b6-1d5d-4dcc-ba05-aa703822b260",
+      "name": "Ollama Embed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const mergedItems = $input.all();\n\nconst vectors = mergedItems.map(item => ({\n  id: item.json.id,\n  values: item.json.embedding,\n  metadata: item.json.metadata\n}));\n\nreturn [{ json: { vectors } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        0
+      ],
+      "id": "41633acd-a7ee-48e9-8694-3358d82e8848",
+      "name": "Collect Embeddings"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lab05-knowledge-base-g4lhclu.svc.aped-4627-b74a.pinecone.io/vectors/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"namespace\": \"software-engineering-kb\",\n  \"vectors\": {{ JSON.stringify($json.vectors) }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        880,
+        0
+      ],
+      "id": "5ccbf782-0bd5-43b0-afc1-f6ead2a5d78f",
+      "name": "Pinecone Upsert",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "6ZH91HAaB4Vouu0U",
+          "name": "Pinecone"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        528,
+        -48
+      ],
+      "id": "2c3c6024-dcb3-4218-bf85-7ae922cdef1a",
+      "name": "Merge"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Prepare Embedding Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Embedding Input": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ollama Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Embed": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Collect Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Collect Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "52c199b8-6649-47b4-ab1f-484affb36bb9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "o8YY52zCPtAO1HG1",
+  "tags": []
+}
