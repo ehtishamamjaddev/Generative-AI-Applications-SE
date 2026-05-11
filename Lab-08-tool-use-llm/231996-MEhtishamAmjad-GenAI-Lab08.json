@@ -1,0 +1,433 @@
+{
+  "name": "Task 2-Lab08",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/kisan-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -288,
+        -304
+      ],
+      "id": "944f46f7-22c4-43c3-b2d6-f2a0e542c367",
+      "name": "Webhook - Query Input",
+      "webhookId": "f0cd232f-957f-413c-86f1-3cf105cc1ad8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        160,
+        -304
+      ],
+      "id": "2b97fcbd-24fd-40f4-84a1-a5beaf7da952",
+      "name": "Travel Assistant LLM",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "T8xG8O1OO39MDaJG",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const llmResponse = $('Travel Assistant LLM').first().json;\nconst toolCall = llmResponse.choices[0].message.tool_calls[0];\nconst args = JSON.parse(toolCall.function.arguments);\n\nconst crop = args.crop?.toLowerCase();\nconst city = args.city?.toLowerCase();\n\nconst prices = {\n  \"wheat\":     { \"lahore\": 3200, \"karachi\": 3300, \"peshawar\": 3100, \"multan\": 3150 },\n  \"rice\":      { \"lahore\": 8500, \"karachi\": 8800, \"peshawar\": 8300, \"multan\": 8400 },\n  \"cotton\":    { \"lahore\": 9200, \"karachi\": 9500, \"peshawar\": 8900, \"multan\": 9100 },\n  \"sugarcane\": { \"lahore\": 280,  \"karachi\": 290,  \"peshawar\": 270,  \"multan\": 285  }\n};\n\nconst price = prices[crop]?.[city];\n\nreturn [{\n  json: {\n    crop: crop,\n    city: city,\n    price_per_kg: price ? `PKR ${price}` : 'Price not found',\n    tool_name: \"get_crop_price\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -512
+      ],
+      "id": "9ed5505f-cb03-4fa7-b040-1cca9cde2fec",
+      "name": "Crop Price Tool"
+    },
+    {
+      "parameters": {
+        "jsCode": "const llmResponse = $('Travel Assistant LLM').first().json;\nconst toolCall = llmResponse.choices[0].message.tool_calls[0];\nconst args = JSON.parse(toolCall.function.arguments);\nconst region = args.region?.toLowerCase();\n\nconst rainfall = {\n  \"punjab\":      { forecast: \"45mm\", days: 5,  status: \"Expected rain mid-week\" },\n  \"sindh\":       { forecast: \"15mm\", days: 7,  status: \"Light rain expected\" },\n  \"kpk\":         { forecast: \"65mm\", days: 3,  status: \"Heavy rain warning\" },\n  \"balochistan\": { forecast: \"5mm\",  days: 10, status: \"Dry conditions continue\" }\n};\n\nconst data = rainfall[region];\n\nreturn [{\n  json: {\n    region: region,\n    forecast: data?.forecast ?? 'Not found',\n    days_ahead: data?.days ?? 0,\n    status: data?.status ?? 'No data',\n    tool_name: \"get_rainfall_forecast\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -336
+      ],
+      "id": "838acef8-6858-4298-9c33-9507b5c810bc",
+      "name": "Rainfall Forecast Tool"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "27c3002b-98a4-4f99-890c-e8acbcbc890c",
+                    "leftValue": "={{ $json.choices[0].finish_reason }}",
+                    "rightValue": "tool_calls",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ce68dac4-bb53-4f2f-8fed-be4b208c6908",
+                    "leftValue": "={{ $json.choices[0].finish_reason }}",
+                    "rightValue": "stop",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        -304
+      ],
+      "id": "ae3be14a-9996-4bdb-bf6c-0a4a72b0bdee",
+      "name": "Detect Tool Call"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9873874f-8596-457a-b7d6-069851ff8751",
+                    "leftValue": "={{ $json.choices[0].message.tool_calls[0].function.name }}",
+                    "rightValue": "get_crop_price",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "24f3d76a-2e1e-4b0c-a88b-7f883b9203c8",
+                    "leftValue": "={{ $json.choices[0].message.tool_calls[0].function.name }}",
+                    "rightValue": "get_rainfall_forecast",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        688,
+        -400
+      ],
+      "id": "27e1dff4-6cf4-4e7c-b7cd-56e5761fb734",
+      "name": "Route to Correct Tool"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "59ca2b1f-697e-4ae6-a3da-3ea38f99fb8b",
+              "leftValue": "={{ $json.turn_count }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1152,
+        -208
+      ],
+      "id": "dfc51964-b1ce-4b8b-9f2e-82b008c34324",
+      "name": "Check Turn Limit"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=={{ JSON.stringify({ answer: $json.choices[0].message.content, tools_called: $('Increment Counter').isExecuted ? $('Increment Counter').first().json.turn_count : 0, domain: \"Kisan Assistant - Agriculture Tool Use\" }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1408,
+        -32
+      ],
+      "id": "d56a95d3-5d1a-4787-8542-08313b08a7b2",
+      "name": "Final Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const toolResult = $input.first().json;\nconst llmResponse = $('Travel Assistant LLM').first().json;\nconst toolCall = llmResponse.choices[0].message.tool_calls[0];\nconst prevMessages = $('Build LLM Payload').first().json.messages;\nconst currentCount = $('Increment Counter').isExecuted \n  ? $('Increment Counter').first().json.turn_count \n  : 0;\n\nreturn [{\n  json: {\n    messages: [\n      ...prevMessages,\n      {\n        role: 'assistant',\n        tool_calls: llmResponse.choices[0].message.tool_calls\n      },\n      {\n        role: 'tool',\n        tool_call_id: toolCall.id,\n        content: JSON.stringify(toolResult)\n      }\n    ],\n    turn_count: currentCount\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        -512
+      ],
+      "id": "61b30bed-7d39-4c78-8293-65746f6b607b",
+      "name": "Inject Tool Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "const isRevision = $('Inject Tool Result').isExecuted;\n\nconst tools = [\n  {\n    type: \"function\",\n    function: {\n      name: \"get_crop_price\",\n      description: \"Get current market price for a crop in a Pakistani city.\",\n      parameters: {\n        type: \"object\",\n        properties: {\n          crop: { type: \"string\" },\n          city: { type: \"string\" }\n        },\n        required: [\"crop\", \"city\"]\n      }\n    }\n  },\n  {\n    type: \"function\",\n    function: {\n      name: \"get_rainfall_forecast\",\n      description: \"Get rainfall forecast for a Pakistani region.\",\n      parameters: {\n        type: \"object\",\n        properties: {\n          region: { type: \"string\" }\n        },\n        required: [\"region\"]\n      }\n    }\n  }\n];\n\nconst messages = isRevision\n  ? $('Inject Tool Result').first().json.messages\n  : [\n      {\n        role: \"system\",\n        content: \"You are a Kisan assistant for Pakistani farmers. You have two tools: get_crop_price and get_rainfall_forecast. When a user asks about BOTH crop prices AND rainfall in the same question, you MUST call both tools. Call the first tool, receive the result, then call the second tool, receive that result, and ONLY THEN provide a final text summary combining both results. Do not give a final answer until you have called all relevant tools.\"\n      },\n      {\n        role: \"user\",\n        content: $('Webhook - Query Input').first().json.body.query\n      }\n    ];\n\nreturn [{\n  json: {\n    model: \"llama-3.1-8b-instant\",\n    temperature: 0.2,\n    max_tokens: 1024,\n    messages: messages,\n    tools: tools,\n    tool_choice: \"auto\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -304
+      ],
+      "id": "5870ca14-b833-4717-b930-ab8e791cac6c",
+      "name": "Build LLM Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst currentCount = Number(inputData.turn_count) || 0;\n\nreturn [{\n  json: {\n    messages: inputData.messages,\n    turn_count: currentCount + 1\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -512
+      ],
+      "id": "eaafc5ed-b9ba-4038-b22b-00bbc381e941",
+      "name": "Increment Counter"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Query Input": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Travel Assistant LLM": {
+      "main": [
+        [
+          {
+            "node": "Detect Tool Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crop Price Tool": {
+      "main": [
+        [
+          {
+            "node": "Inject Tool Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rainfall Forecast Tool": {
+      "main": [
+        [
+          {
+            "node": "Inject Tool Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Tool Call": {
+      "main": [
+        [
+          {
+            "node": "Route to Correct Tool",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Turn Limit": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route to Correct Tool": {
+      "main": [
+        [
+          {
+            "node": "Crop Price Tool",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rainfall Forecast Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inject Tool Result": {
+      "main": [
+        [
+          {
+            "node": "Increment Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Payload": {
+      "main": [
+        [
+          {
+            "node": "Travel Assistant LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Increment Counter": {
+      "main": [
+        [
+          {
+            "node": "Check Turn Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "fe75e7a8-a7da-40be-9bad-124dde8506da",
+  "meta": {
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "jyZkrH1fVx1mej1S",
+  "tags": []
+}
