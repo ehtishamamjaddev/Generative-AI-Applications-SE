@@ -1,0 +1,6 @@
+The Reflection Pattern separates the algorithmic logic (the Generator-Critic loop)
+from the LLM provider implementation (Groq vs Ollama). The loop structure, prompts,
+stopping conditions, and response schema remain identical between both versions.
+Only the call_llm() function changes, demonstrating true provider-agnostic design.
+This means we can swap cloud APIs for local models, or test different providers,
+without rewriting the core reflection logic, making the system portable and flexible.

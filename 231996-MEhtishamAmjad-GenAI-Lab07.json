@@ -1,0 +1,423 @@
+{
+  "name": "Lab07_Task2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reflect",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -64,
+        0
+      ],
+      "id": "ca5ab005-b984-4b69-a161-822ed2445f86",
+      "name": "Webhook",
+      "webhookId": "e4685ff9-d83b-4e3f-bd37-3c33e6aa7f38"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a22eb2b0-3352-4ff3-af87-dfaa02c535bd",
+              "name": "round",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "0efd0d98-87dd-417d-a26d-ff340fddffa7",
+              "name": "task",
+              "value": "={{ $json.body.task }}",
+              "type": "string"
+            },
+            {
+              "id": "a751cb9e-0934-44f8-a690-ebfd316bd6a1",
+              "name": "current_code",
+              "value": "\"\"",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        96,
+        -112
+      ],
+      "id": "65610348-685a-47a7-aa22-cdd12621e995",
+      "name": "Initialize Counter"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        832,
+        112
+      ],
+      "id": "4794809e-521e-4f81-92b6-1bd3578d0500",
+      "name": "Critic",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JJ9UrqVhr9owEhte",
+          "name": "Groq"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "66d267f9-991a-403b-a65b-8d2a50b27783",
+              "leftValue": "={{ $json.choices[0].message.content }}",
+              "rightValue": "APPROVED",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        992,
+        0
+      ],
+      "id": "a43021e5-e921-4f9c-bdaa-7d8787d957b7",
+      "name": "Check Approved"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track round using a static counter approach\nconst items = $input.all();\nconst inputData = items[0].json;\n\n// critique comes from Critic via Check Approved false branch\nconst critique = inputData.choices?.[0]?.message?.content || inputData.critique || '';\nconst current_code = $('Generator').first().json.choices[0].message.content;\nconst task = $('Initialize Counter').first().json.task;\n\n// Count how many times Round Counter has been called\nconst executionCount = $execution.customData?.get?.('round') ?? 0;\nconst newRound = Number(executionCount) + 1;\n\nreturn [{\n  json: {\n    task: task,\n    round: newRound,\n    critique: critique,\n    current_code: current_code\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        208
+      ],
+      "id": "98a2ef6b-b87a-4951-b10e-70f162ee047b",
+      "name": "Round Counter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3e35891d-f9f9-4cc9-9340-81e1430d922a",
+              "leftValue": "={{ $json.round }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1440,
+        208
+      ],
+      "id": "31a3b3d8-ae0c-4c14-84d2-8a3233b338f9",
+      "name": "Max Rounds Check"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=={{ JSON.stringify({ final_code: $('Build Generator Payload').first().json.generated_code, round_count: $('Round Counter').isExecuted ? $('Round Counter').first().json.round : 1, approved: true }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1200,
+        -96
+      ],
+      "id": "155ba947-d0c9-45e1-9d60-ed17011325b7",
+      "name": "Respond - Approved"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=={{ JSON.stringify({ final_code: $('Build Generator Payload').first().json.generated_code, round_count: 3, approved: false }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1600,
+        96
+      ],
+      "id": "1659310f-81f1-45f8-93d9-4d8871be1112",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\nconst code = inputData.generated_code || inputData.choices?.[0]?.message?.content || '';\n\nreturn [{\n  json: {\n    model: \"llama-3.1-8b-instant\",\n    temperature: 0.3,\n    max_tokens: 1024,\n    messages: [\n      {\n        role: \"system\",\n        content: \"You are a senior code reviewer for financial fraud detection systems. Evaluate the Python code against:\\n1. Correctness of fraud logic\\n2. Explainability of decisions\\n3. Absence of demographic bias\\n4. Edge cases for unusual transactions\\n5. Regulatory compliance language\\n\\nFor each problem write:\\nISSUE [criterion]: specific problem\\n\\nIf ALL five criteria are met, respond with exactly one word: APPROVED\\n\\nNever say APPROVED if any criterion has an issue.\"\n      },\n      {\n        role: \"user\",\n        content: \"Review this Python code:\\n\\n\" + code\n      }\n    ]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -112
+      ],
+      "id": "449ff9ce-00e9-4a3e-88f9-e5498cfcbd01",
+      "name": "Build Critic Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $input.first().json;\n\nconst task = inputData.task || $('Initialize Counter').first().json.task || '';\nconst critique = inputData.critique || null;\nconst current_code = inputData.current_code || null;\n\nconst userMessage = (critique && current_code)\n  ? `Revise this Python code.\\n\\nOriginal:\\n${current_code}\\n\\nCritique:\\n${critique}`\n  : task;\n\nreturn [{\n  json: {\n    model: \"llama-3.1-8b-instant\",\n    temperature: 0.3,\n    max_tokens: 1024,\n    messages: [\n      {\n        role: \"system\",\n        content: \"You are an expert Python developer. Write a clean working Python function with a docstring. Handle edge cases. Return ONLY Python code no explanation no markdown.\"\n      },\n      {\n        role: \"user\",\n        content: userMessage\n      }\n    ]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        96
+      ],
+      "id": "acc8fce5-6155-4825-9b33-059ad3a9f68b",
+      "name": "Build Generator Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        336,
+        -96
+      ],
+      "id": "dd17e2a9-10b8-44c7-a1bf-0d9fdcd52b72",
+      "name": "Generator",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "JJ9UrqVhr9owEhte",
+          "name": "Groq"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        240
+      ],
+      "id": "d5e94149-3400-4c36-9e7d-014e3ccc8d26",
+      "name": "Rate Limit Dela",
+      "webhookId": "0bbd290a-8587-403b-8d53-c3ef952dd357"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        544,
+        -96
+      ],
+      "id": "b0556437-9cee-4694-87c4-876465f64b93",
+      "name": "Generator Delay",
+      "webhookId": "fd0b1958-0487-47c5-9583-0eb48f9e9aea"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Initialize Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Counter": {
+      "main": [
+        [
+          {
+            "node": "Build Generator Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Critic": {
+      "main": [
+        [
+          {
+            "node": "Check Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Approved": {
+      "main": [
+        [
+          {
+            "node": "Respond - Approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Round Counter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Round Counter": {
+      "main": [
+        [
+          {
+            "node": "Max Rounds Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Max Rounds Check": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Generator Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Critic Payload": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Dela",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Generator Payload": {
+      "main": [
+        [
+          {
+            "node": "Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generator": {
+      "main": [
+        [
+          {
+            "node": "Generator Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Dela": {
+      "main": [
+        [
+          {
+            "node": "Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generator Delay": {
+      "main": [
+        [
+          {
+            "node": "Build Critic Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "71534ee2-af35-414b-8b65-cf4fd80b592a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e83ed361eedfb0eeb5f03175381132386c665b0e477bdc5ef60a598901123177"
+  },
+  "id": "STdELIIeo3kJWiHY",
+  "tags": []
+}

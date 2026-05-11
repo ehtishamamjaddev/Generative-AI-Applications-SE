@@ -1,0 +1,5 @@
+The Reflection Pattern separates core algorithm (Generator–Critic loop and stopping rules) from the LLM provider implementation.
+The loop logic, system prompts, response schema, and stopping conditions remain identical across Groq and Ollama.
+Only the call_llm() adapter changes to adapt to each provider's API and response format.
+This makes the design provider-agnostic because swapping providers requires modifying a single adapter function.
+Benefit: portability and flexibility — switch providers for cost, latency, privacy, or testing without rewriting core logic.
